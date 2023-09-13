@@ -5,10 +5,11 @@ const jwt = require("jsonwebtoken");
 const validateMongoDbID = require("../utils/validate_mongodbid");
 validateMongoDbID;
 
+// @desc    Register a user
+// @access  Public
 const createUser = asyncHandler(async (req, res) => {
   const { firstname, lastname, email, mobile, password } = req.body;
 
-  // Check if user exists
   const userExists = await User.findOne({ email });
 
   if (userExists) {
@@ -16,10 +17,8 @@ const createUser = asyncHandler(async (req, res) => {
     throw new Error("User already exists");
   }
 
-  // Hash password
   const hashedPassword = await util.hashPassword(password);
 
-  // Create user
   const user = await User.create({
     firstname,
     lastname,
@@ -48,10 +47,23 @@ const createUser = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // Check for user email
   const user = await User.findOne({ email });
 
   if (user && (await util.isPasswordMatched(password, user.password))) {
+    const refreshToken = await generateRefreshToken(user._id);
+    const updateUser = await User.findByIdAndUpdate(
+      user.id,
+      {
+        refreshToken: refreshToken,
+      },
+      {
+        new: true,
+      }
+    );
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      maxAge: 72 * 60 * 60 * 1000,
+    });
     res.json({
       _id: user.id,
       firstName: user.firstname,
@@ -66,6 +78,8 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Update a user
+// @access  Private
 const updateUser = asyncHandler(async (req, res) => {
   const { _id } = req.user;
   validateMongoDbID(id);
@@ -90,6 +104,8 @@ const updateUser = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    get all users
+// @access  Admin
 const getAllUsers = asyncHandler(async (req, res) => {
   try {
     const getUsers = await User.find();
@@ -100,18 +116,22 @@ const getAllUsers = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    get a single user
+// @access  Admin
 const getASingleUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoDbID(id);
   try {
     const getUser = await User.findById(id);
-    console.log(getUser);
+    
     res.json(getUser);
   } catch (error) {
     throw new Error(error);
   }
 });
 
+// @desc    delete a user
+// @access  Admin
 const deleteAUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoDbID(id);
@@ -125,6 +145,8 @@ const deleteAUser = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    block a user
+// @access  Admin
 const blockAUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoDbID(id);
@@ -144,6 +166,8 @@ const blockAUser = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    unblock a user
+// @access  Admin
 const unblockAUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoDbID(id);
@@ -163,10 +187,54 @@ const unblockAUser = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    handle refresh token
+// @access  Public
+const handleRefreshToken = asyncHandler(async (req, res) => {
+  const { cookie } = req.cookies;
+  if (!cookie?.refreshToken) throw new Error("No Refresh Token in cookies");
+  const refreshToken = cookie.refreshToken;
+  const user = await User.findOne({ refreshToken });
+  if (!user) throw new Error("No Refresh Token in database");
+  jwt.verify(refreshToken, process.env.TZ, (err, decoded) => {
+    if (err || user.id !== decoded.id) {
+      throw new Error("There is something wrong with the refresh token");
+    }
+    const accessToken = generateToken(user._id);
+    res.json(accessToken);
+  });
+});
+
+//Logout
+const logoutUser = asyncHandler(async (req, res) => {
+  const { cookie } = req.cookies;
+  if (!cookie?.refreshToken) throw new Error("No Refresh Token in cookies");
+  rror(error);
+  const refreshToken = cookie.refreshToken;
+  const user = await User.findOne({ refreshToken });
+  if (!user) {
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: true,
+    });
+    return res.sendStatus(204);
+  }
+  await User.findOneAndUpdate(refreshToken, {
+    httpOnly: true,
+    secure: true,
+  });
+  return res.sendStatus(204);
+});
+
 // Generate JWT
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: "30d",
+    expiresIn: "1d",
+  });
+};
+
+const generateRefreshToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "1d",
   });
 };
 
@@ -179,4 +247,6 @@ module.exports = {
   deleteAUser,
   blockAUser,
   unblockAUser,
+  handleRefreshToken,
+  logoutUser,
 };
