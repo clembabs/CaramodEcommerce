@@ -3,6 +3,7 @@ const asyncHandler = require("express-async-handler");
 const util = require("../utils/util");
 const jwt = require("jsonwebtoken");
 const validateMongoDbID = require("../utils/validate_mongodbid");
+const sendEmail = require("./email_controller");
 validateMongoDbID;
 
 // @desc    Register a user
@@ -123,7 +124,7 @@ const getASingleUser = asyncHandler(async (req, res) => {
   validateMongoDbID(id);
   try {
     const getUser = await User.findById(id);
-    
+
     res.json(getUser);
   } catch (error) {
     throw new Error(error);
@@ -223,6 +224,27 @@ const logoutUser = asyncHandler(async (req, res) => {
     secure: true,
   });
   return res.sendStatus(204);
+});
+
+const forgotPasswordToken = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) throw new Error("User not found with this email");
+  try {
+    const token = await user.createPasswordResetToken();
+    await user.save();
+    const resetURL = `Hi, Please click on the link to reset password, this link is valid for 10mins. <a href>='http://localhost:5005/api/user/reset-password'`;
+    const data = {
+      to: email,
+      text: "Hey User",
+      subject: "Forgost Password link",
+      htm: resetURL,
+    };
+    sendEmail(data);
+    res.json(token);
+  } catch (error) {
+    throw new Error(error);
+  }
 });
 
 // Generate JWT
