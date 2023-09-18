@@ -5,6 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const authRouter = require("./routes/auth_route");
 const productRouter = require("./routes/product_route");
+const blogRouter = require("./routes/blog_route");
 const bodyParser = require("body-parser");
 const { errorHandler } = require("./middlewares/error_handlers");
 const cookieParser = require("cookie-parser");
@@ -18,6 +19,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use("/api/user", authRouter);
 app.use("/api/product", productRouter);
+app.use("/api/blog", blogRouter);
 app.use(errorHandler);
 app.use(cookieParser());
 
