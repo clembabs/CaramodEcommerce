@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const Product = require("../models/product.model");
+const User = require("../models/user.model");
 const validateMongoDbID = require("../utils/validate_mongodbid");
 
 const createProduct = asyncHandler(async (req, res) => {
@@ -103,10 +104,48 @@ const getAllProducts = asyncHandler(async (req, res) => {
   }
 });
 
+const addToWishlist = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  const { productId } = req.body;
+  validateMongoDbID(productId);
+
+  try {
+    const user = await User.findById(_id);
+    const alreadyAdded = user?.wishlist?.find(
+      (userId) => userId?.toString() === productId?.toString()
+    );
+
+    if (alreadyAdded) {
+      const user = await User.findByIdAndUpdate(
+        _id,
+        {
+          $pull: { wishlist: productId },
+        },
+        {
+          new: true,
+        }
+      );
+      res.json(user);
+    } else {
+      const user = await User.findByIdAndUpdate(
+        _id,
+        {
+          $push: { wishlist: productId },
+        },
+        {
+          new: true,
+        }
+      );
+      res.json(user);
+    }
+  } catch (error) {}
+});
+
 module.exports = {
   createProduct,
   updateProduct,
   getASingleProduct,
   getAllProducts,
   deleteProduct,
+  addToWishlist,
 };
