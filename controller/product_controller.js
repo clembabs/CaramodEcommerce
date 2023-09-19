@@ -2,6 +2,8 @@ const asyncHandler = require("express-async-handler");
 const Product = require("../models/product.model");
 const User = require("../models/user.model");
 const validateMongoDbID = require("../utils/validate_mongodbid");
+const { cloudinaryUploadImage } = require("../utils/cloudinary");
+const fs = require("fs");
 
 const createProduct = asyncHandler(async (req, res) => {
   try {
@@ -143,7 +145,7 @@ const addToWishlist = asyncHandler(async (req, res) => {
 
 const incDecRatings = asyncHandler(async (req, res) => {
   const { _id } = req.user;
-  const { star, productId,comment } = req.body;
+  const { star, productId, comment } = req.body;
 
   try {
     const product = await Product.findById(_id);
@@ -157,7 +159,7 @@ const incDecRatings = asyncHandler(async (req, res) => {
           ratings: { $elemMatch: alreadyRated },
         },
         {
-          $set: { "ratings.$.star": star ,"ratings.$.comment": comment},
+          $set: { "ratings.$.star": star, "ratings.$.comment": comment },
         },
         {
           new: true,
@@ -170,7 +172,7 @@ const incDecRatings = asyncHandler(async (req, res) => {
           $push: {
             ratings: {
               star: star,
-              comment:comment,
+              comment: comment,
               postedBy: _id,
             },
           },
@@ -199,6 +201,37 @@ const incDecRatings = asyncHandler(async (req, res) => {
   } catch (error) {}
 });
 
+const uploadProductImages = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  validateMongoDbID(id);
+  try {
+    const uploader = (path) => cloudinaryUploadImage(path, "images");
+    const urls = [];
+    const files = req.files;
+    for (const file in files) {
+      const { path } = file;
+      const newPath = await uploader(path);
+      urls.push(newPath);
+      fs.unlinkSync(path);
+      
+    }
+    const findProduct = await Product.findByIdAndUpdate(
+      id,
+      {
+        images: urls.map((file) => {
+          return file;
+        }),
+      },
+      {
+        new: true,
+      }
+    );
+    res.json(findProduct);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
 module.exports = {
   createProduct,
   updateProduct,
@@ -207,4 +240,5 @@ module.exports = {
   deleteProduct,
   addToWishlist,
   incDecRatings,
+  uploadProductImages,
 };

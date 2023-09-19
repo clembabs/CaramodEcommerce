@@ -3,6 +3,7 @@ const asyncHandler = require("express-async-handler");
 
 
 //Use this for password forget
+//Read more about nodemailer and set up account with your company/user google account
 const sendEmail = asyncHandler(async (data, req, res) => {
     const transporter = nodemailer.createTransport({
         host: "smtp.gmail.com",
