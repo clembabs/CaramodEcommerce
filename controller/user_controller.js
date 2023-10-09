@@ -79,6 +79,45 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 });
 
+//Admin Login
+const loginAdmin = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+
+  const adminUser = await User.findOne({ email });
+  if (adminUser.role !== "admin") throw new Error("Not Authorized");
+
+  if (
+    adminUser &&
+    (await util.isPasswordMatched(password, adminUser.password))
+  ) {
+    const refreshToken = await generateRefreshToken(adminUser._id);
+    const updateUser = await User.findByIdAndUpdate(
+      adminUser.id,
+      {
+        refreshToken: refreshToken,
+      },
+      {
+        new: true,
+      }
+    );
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      maxAge: 72 * 60 * 60 * 1000,
+    });
+    res.json({
+      _id: adminUser.id,
+      firstName: adminUser.firstname,
+      lastName: adminUser.lastname,
+      email: adminUser.email,
+      mobile: adminUser?.mobile,
+      token: generateToken(adminUser._id),
+    });
+  } else {
+    res.status(400);
+    throw new Error("Invalid credentials");
+  }
+});
+
 // @desc    Update a user
 // @access  Private
 const updateUser = asyncHandler(async (req, res) => {
@@ -226,6 +265,24 @@ const logoutUser = asyncHandler(async (req, res) => {
   return res.sendStatus(204);
 });
 
+// const resetPassword = asyncHandler(async (req,res) => {
+//   const { password } = req.body;
+//   const { token } = req.params;
+
+//   const hashedToken = crypto.createHash("256").update(token).digest("hex");
+//   const user = await User.findOne({
+//     passwordResetToken: hashedToken,
+//     passwordResetExpires: { $gt: Date.now()},
+//   });
+
+//   if(!user) throw new Error("Token Expired, Please try again later");
+//   user.password = password;
+//   user.passwordResetToken = undefined;
+//   user.passwordResetExpires = undefined;
+//   await user.save();
+//   res.json(user);
+// })
+
 const forgotPasswordToken = asyncHandler(async (req, res) => {
   const { email } = req.body;
   const user = await User.findOne({ email });
@@ -246,6 +303,38 @@ const forgotPasswordToken = asyncHandler(async (req, res) => {
     throw new Error(error);
   }
 });
+
+
+//Get Wishlist
+const getWishlist = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  try {
+    const findUser = await User.findById(_id).populate('wishlist');
+    res.json(findUser);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+//Save Address
+const saveUserAddress = asyncHandler(async (req,res, next) => {
+  const { _id } = req.user;
+  validateMongoDbID(_id);
+  try {
+    const updatedUser = await User.findByIdAndUpdate(
+      _id,
+      {
+        address: req?.body?.address,
+       
+      }, {
+        new: true,
+      }
+    )
+    res.json(updatedUser);
+  } catch (error) {
+    throw new Error(error);
+  }
+})
 
 // Generate JWT
 const generateToken = (id) => {
@@ -271,4 +360,8 @@ module.exports = {
   unblockAUser,
   handleRefreshToken,
   logoutUser,
+  forgotPasswordToken,
+  loginAdmin,
+  getWishlist,
+  saveUserAddress,
 };
